@@ -2,10 +2,10 @@ import discord
 from main import create, variation
 from PIL import ImageStat
 import json
+import requests
 
 from discord.commands import Option
 intents = discord.Intents.default()
-
 
 intents.message_content = True
 intents.guild_reactions = True
@@ -28,9 +28,15 @@ with open('settings.json') as settings:
 async def on_ready():
     print(f'We have logged in as {client.user}')
 
+    login_data = {
+    'api_dev_key': pb_token,
+    'api_user_name': pb_user,
+    'api_user_password': pb_pass
+    }
 
-
-
+    login = requests.post("https://pastebin.com/api/api_login.php", data=login_data)
+    print("Login status: ", login.status_code if login.status_code != 200 else "OK/200")
+    print("User token: ", login.text)
 
     with open(file_name, 'r') as f:
                 data = json.load(f)
