@@ -17,9 +17,21 @@ url = "http://127.0.0.1:7860"
 file_name = 'image_settings.json'
 g_ids =[874103575859576863]
 
+with open('settings.json') as settings:
+    data = json.load(settings)
+    token = data["TOKEN"]
+    pb_token = data['PB_TOKEN']
+    pb_pass = data['PB_PASSWORD']
+    pb_user = data['PB_USERNAME']
+
 @client.event
 async def on_ready():
     print(f'We have logged in as {client.user}')
+
+
+
+
+
     with open(file_name, 'r') as f:
                 data = json.load(f)
                 data['images'].clear()
@@ -314,4 +326,4 @@ denoising_strength: Option(float, description="Amount image is diffused", requir
     # await sent_message.edit_original_response(file=image3, embed=embed, content='', view=MyView())
 
 
-client.run('OTk2NzAwMTAwOTQyMzcyOTU0.GZWToI.cQeF4E1bTJ2S0d-M31fJsk1b1XiG9KdByPK5tU')
+client.run(token)
