@@ -1,5 +1,5 @@
 import discord
-from main import create, variation
+from commands.generation import create, variation
 from PIL import ImageStat
 import json
 import requests
@@ -15,7 +15,7 @@ client = discord.Bot(intents=intents)
 
 url = "http://127.0.0.1:7860"
 file_name = 'image_settings.json'
-g_ids =[874103575859576863]
+g_ids =[1010879727407472670]
 
 with open('settings.json') as settings:
     data = json.load(settings)
@@ -24,26 +24,17 @@ with open('settings.json') as settings:
     pb_pass = data['PB_PASSWORD']
     pb_user = data['PB_USERNAME']
 
-@client.event
-async def on_ready():
-    print(f'We have logged in as {client.user}')
-
-    login_data = {
+login = requests.post("https://pastebin.com/api/api_login.php", data={
     'api_dev_key': pb_token,
     'api_user_name': pb_user,
     'api_user_password': pb_pass
-    }
+})
+print("Login status: ", login.status_code if login.status_code != 200 else "OK/200")
+print("User token: ", login.text)
 
-    login = requests.post("https://pastebin.com/api/api_login.php", data=login_data)
-    print("Login status: ", login.status_code if login.status_code != 200 else "OK/200")
-    print("User token: ", login.text)
-
-    with open(file_name, 'r') as f:
-                data = json.load(f)
-                data['images'].clear()
-    with open(file_name, 'w') as f:
-                f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
-
+@client.event
+async def on_ready():
+    print(f'We have logged in as {client.user}')
 
 @client.event
 async def on_message(message):
@@ -145,7 +136,7 @@ async def on_message(message):
 async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")): 
 
     sent_message = await ctx.response.send_message('thinking... <a:loading:1047116523757654047>')
-    arr, image, json_obj = await create(prompt)
+    arr, image, info = await create(prompt)
     image3 = discord.File(fp=arr, filename='test.png')
     class MyView(discord.ui.View):
         @discord.ui.button(label="Make Variation", style=discord.ButtonStyle.secondary, emoji="🎨") 
@@ -154,71 +145,37 @@ async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")):
             variation_payload = await interaction.response.send_message('thinking... <a:loading:1047116523757654047>')
             get_attachment_interaction = await sent_message.original_response()
             get_attachment_message = await ctx.channel.fetch_message(get_attachment_interaction.id)
-            variation_payload_interaction= await variation_payload.original_response()
-            variation_payload_message = await ctx.channel.fetch_message(variation_payload_interaction.id)
 
-            arr, image, json_obj = await variation(prompt, get_attachment_message.embeds[0].image.url)
+            arr, image, info = await variation(prompt, get_attachment_message.embeds[0].image.url)
             image3 = discord.File(fp=arr, filename='test.png')
 
-            json_final = {
-                    f"{variation_payload_message.id}": {
-                        "steps": int(json_obj['steps']),
-                        "sampler_name": str(json_obj['sampler_name']),
-                        "seed": int(json_obj['seed']),
-                        "cfg_scale": float(json_obj['cfg_scale']),
-                        "width": int(json_obj['width']),
-                        "height": int(json_obj['height']),
-                        "model": str(json_obj['model']),
-                        "denoising_strength": float(json_obj['denoising_strength'])
-                    }
-            }
+            data = {
+                'api_option': 'paste',
+                'api_dev_key':pb_token,
+                'api_paste_code':info,
+                'api_paste_name':prompt[:97] + (prompt[97:] and '...'),
+                'api_user_key': login.text
+                }
 
-            with open(file_name, 'r') as f:
-                data = json.load(f)
-                data['images'].append(json_final)
-            with open(file_name, 'w') as f:
-                f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
+            r = requests.post("https://pastebin.com/api/api_post.php", data=data)
             
             def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-            embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**')
+            embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({r.text})')
             embed.set_image(url="attachment://test.png")
             await variation_payload.edit_original_response(file=image3, embed=embed, content='', view=MyView())
 
-        @discord.ui.button(label="Reveal Settings", style=discord.ButtonStyle.secondary, emoji="🔨") 
-        async def first_button_callback(self, button, interaction):
 
-            with open(file_name, 'r') as f:
-                data = json.load(f)
-            for i in data['images']:
-                if str(interaction.message.id) in i:
-                    settings_payload = json.dumps(i)
-                    await interaction.response.send_message(f"```json\n{settings_payload}```")
+    data = {
+        'api_option': 'paste',
+        'api_dev_key':pb_token,
+        'api_paste_code':info,
+        'api_paste_name':prompt[:97] + (prompt[97:] and '...'),
+        'api_user_key': login.text
+        }
 
-
-    original_message = await sent_message.original_response()
-
-
-    json_final = {
-            f"{original_message.id}": {
-                "steps": int(json_obj['steps']),
-                "sampler_name": str(json_obj['sampler_name']),
-                "seed": int(json_obj['seed']),
-                "cfg_scale": float(json_obj['cfg_scale']),
-                "width": int(json_obj['width']),
-                "height": int(json_obj['height']),
-                "model": str(json_obj['model']),
-                "denoising_strength": float(json_obj['denoising_strength'])
-            }
-    }
-
-    with open(file_name, 'r') as f:
-        data = json.load(f)
-        data['images'].append(json_final)
-    with open(file_name, 'w') as f:
-         f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
-
+    r = requests.post("https://pastebin.com/api/api_post.php", data=data)
     def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-    embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'**{prompt}**')
+    embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'**{prompt}**\n[(Generation Settings)]({r.text})')
     embed.set_image(url="attachment://test.png")
     await sent_message.edit_original_response(file=image3, embed=embed, content='', view=MyView())
 
@@ -252,84 +209,7 @@ denoising_strength: Option(float, description="Amount image is diffused", requir
     print(model)
     print(sampler_name)
     print(denoising_strength)
-    
-    # sent_message = await ctx.response.send_message('thinking... <a:loading:1047116523757654047>')
-    # arr, image, json_obj = await create(prompt)
-    # image3 = discord.File(fp=arr, filename='test.png')
-    # class MyView(discord.ui.View):
-    #     @discord.ui.button(label="Make Variation", style=discord.ButtonStyle.secondary, emoji="🎨") 
-    #     async def second_button_callback(self, button, interaction):
 
-    #         variation_payload = await interaction.response.send_message('thinking... <a:loading:1047116523757654047>')
-    #         get_attachment_interaction = await sent_message.original_response()
-    #         get_attachment_message = await ctx.channel.fetch_message(get_attachment_interaction.id)
-    #         variation_payload_interaction= await variation_payload.original_response()
-    #         variation_payload_message = await ctx.channel.fetch_message(variation_payload_interaction.id)
-
-    #         arr, image, json_obj = await variation(prompt, get_attachment_message.embeds[0].image.url)
-    #         image3 = discord.File(fp=arr, filename='test.png')
-
-    #         json_final = {
-    #                 f"{variation_payload_message.id}": {
-    #                     "steps": int(json_obj['steps']),
-    #                     "sampler_name": str(json_obj['sampler_name']),
-    #                     "seed": int(json_obj['seed']),
-    #                     "cfg_scale": float(json_obj['cfg_scale']),
-    #                     "width": int(json_obj['width']),
-    #                     "height": int(json_obj['height']),
-    #                     "model": str(json_obj['model']),
-    #                     "denoising_strength": float(json_obj['denoising_strength'])
-    #                 }
-    #         }
-
-    #         with open(file_name, 'r') as f:
-    #             data = json.load(f)
-    #             data['images'].append(json_final)
-    #         with open(file_name, 'w') as f:
-    #             f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
-            
-    #         def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-    #         embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**')
-    #         embed.set_image(url="attachment://test.png")
-    #         await variation_payload.edit_original_response(file=image3, embed=embed, content='', view=MyView())
-
-    #     @discord.ui.button(label="Reveal Settings", style=discord.ButtonStyle.secondary, emoji="🔨") 
-    #     async def first_button_callback(self, button, interaction):
-
-    #         with open(file_name, 'r') as f:
-    #             data = json.load(f)
-    #         for i in data['images']:
-    #             if str(interaction.message.id) in i:
-    #                 settings_payload = json.dumps(i)
-    #                 await interaction.response.send_message(f"```json\n{settings_payload}```")
-
-
-    # original_message = await sent_message.original_response()
-
-
-    # json_final = {
-    #         f"{original_message.id}": {
-    #             "steps": int(json_obj['steps']),
-    #             "sampler_name": str(json_obj['sampler_name']),
-    #             "seed": int(json_obj['seed']),
-    #             "cfg_scale": float(json_obj['cfg_scale']),
-    #             "width": int(json_obj['width']),
-    #             "height": int(json_obj['height']),
-    #             "model": str(json_obj['model']),
-    #             "denoising_strength": float(json_obj['denoising_strength'])
-    #         }
-    # }
-
-    # with open(file_name, 'r') as f:
-    #     data = json.load(f)
-    #     data['images'].append(json_final)
-    # with open(file_name, 'w') as f:
-    #      f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
-
-    # def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-    # embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'**{prompt}**')
-    # embed.set_image(url="attachment://test.png")
-    # await sent_message.edit_original_response(file=image3, embed=embed, content='', view=MyView())
 
 
 client.run(token)
