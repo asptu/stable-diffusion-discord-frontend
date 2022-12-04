@@ -1,8 +1,11 @@
 import discord
 from commands.generation import create, variation
-from PIL import ImageStat
+from stable_diffusion_webui.scripts.sd_upscale import run
+from PIL import ImageStat, Image
 import json
 import requests
+from io import BytesIO
+
 
 from discord.commands import Option
 intents = discord.Intents.default()
@@ -163,6 +166,22 @@ async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")):
             embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({r.text})')
             embed.set_image(url="attachment://test.png")
             await variation_payload.edit_original_response(file=image3, embed=embed, content='', view=MyView())
+        
+        @discord.ui.button(label="Upscale", style=discord.ButtonStyle.secondary, emoji="🔎") 
+        async def first_button_callback(self, button, interaction):
+
+            variation_payload = await interaction.response.send_message('thinking... <a:loading:1047116523757654047>')
+            get_attachment_interaction = await sent_message.original_response()
+            get_attachment_message = await ctx.channel.fetch_message(get_attachment_interaction.id)
+
+            response = requests.get(get_attachment_message.embeds[0].image.url)
+            img = Image.open(BytesIO(response.content))
+
+            input_image = img.init_images[0]
+            processed, image, info = await run(_,input_image, 64, 5)
+            image3 = discord.File(fp=image, filename='test.png')
+
+            await variation_payload.edit_original_response(file=image3, content='', view=MyView())
 
 
     data = {
