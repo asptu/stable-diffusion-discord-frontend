@@ -1,6 +1,5 @@
 import discord
 from commands.generation import create, variation
-from stable_diffusion_webui.scripts.sd_upscale import run
 from PIL import ImageStat, Image
 import json
 import requests
@@ -16,6 +15,7 @@ intents.reactions = True
 
 client = discord.Bot(intents=intents)
 
+
 url = "http://127.0.0.1:7860"
 file_name = 'image_settings.json'
 g_ids =[1010879727407472670]
@@ -23,17 +23,15 @@ g_ids =[1010879727407472670]
 with open('settings.json') as settings:
     data = json.load(settings)
     token = data["TOKEN"]
-    pb_token = data['PB_TOKEN']
-    pb_pass = data['PB_PASSWORD']
-    pb_user = data['PB_USERNAME']
+    pe_token = data['PE_TOKEN']
 
-login = requests.post("https://pastebin.com/api/api_login.php", data={
-    'api_dev_key': pb_token,
-    'api_user_name': pb_user,
-    'api_user_password': pb_pass
-})
-print("Login status: ", login.status_code if login.status_code != 200 else "OK/200")
-print("User token: ", login.text)
+    pe_headers = {
+    'Content-Type': 'application/json',
+    'X-Auth-Token': pe_token,
+    }
+
+
+
 
 @client.event
 async def on_ready():
@@ -136,10 +134,11 @@ async def on_message(message):
 
 
 @client.slash_command(guild_ids=[g_ids[0]], description="makes your words reality")
-async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")): 
+async def think(ctx, prompt: Option(str, description="What you WANT in your image", required=True),
+neg_prompt: Option(str, description="What you DON'T WANT in your image (Not Required)", required=False)): 
 
     sent_message = await ctx.response.send_message('thinking... <a:loading:1047116523757654047>')
-    arr, image, info = await create(prompt)
+    arr, image, info = await create(prompt, neg_prompt)
     image3 = discord.File(fp=arr, filename='test.png')
     class MyView(discord.ui.View):
         @discord.ui.button(label="Make Variation", style=discord.ButtonStyle.secondary, emoji="🎨") 
@@ -153,17 +152,15 @@ async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")):
             image3 = discord.File(fp=arr, filename='test.png')
 
             data = {
-                'api_option': 'paste',
-                'api_dev_key':pb_token,
-                'api_paste_code':info,
-                'api_paste_name':prompt[:97] + (prompt[97:] and '...'),
-                'api_user_key': login.text
+                "description":prompt[:61] + (prompt[61:] and '...'),"sections":[{"name":prompt[:12] + (prompt[12:] and '...'),"syntax":"autodetect","contents":"Prompt: "+info}]
                 }
 
-            r = requests.post("https://pastebin.com/api/api_post.php", data=data)
-            
+            r = requests.post(
+            "https://api.paste.ee/v1/pastes", data=str(data).replace('\'','"'), headers=pe_headers)
+            details_link = r.json()['link']
+
             def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-            embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({r.text})')
+            embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Variation of: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({details_link})')
             embed.set_image(url="attachment://test.png")
             await variation_payload.edit_original_response(file=image3, embed=embed, content='', view=MyView())
         
@@ -178,23 +175,25 @@ async def think(ctx, prompt: Option(str, description="get a bit crazy wit it")):
             img = Image.open(BytesIO(response.content))
 
             input_image = img.init_images[0]
-            processed, image, info = await run(_,input_image, 64, 5)
+
+
+
             image3 = discord.File(fp=image, filename='test.png')
 
             await variation_payload.edit_original_response(file=image3, content='', view=MyView())
 
 
     data = {
-        'api_option': 'paste',
-        'api_dev_key':pb_token,
-        'api_paste_code':info,
-        'api_paste_name':prompt[:97] + (prompt[97:] and '...'),
-        'api_user_key': login.text
+        "description":prompt[:61] + (prompt[61:] and '...'),"sections":[{"name":prompt[:12] + (prompt[12:] and '...'),"syntax":"autodetect","contents":"Prompt: "+info}]
         }
 
-    r = requests.post("https://pastebin.com/api/api_post.php", data=data)
+    r = requests.post(
+    "https://api.paste.ee/v1/pastes", data=str(data).replace('\'','"'), headers=pe_headers)
+    print(r.json())
+    details_link = r.json()['link']
+    
     def rgb2int(rgb): return (rgb[0]<<16)+(rgb[1]<<8)+rgb[2]
-    embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'**{prompt}**\n[(Generation Settings)]({r.text})')
+    embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'**{prompt}**\n[(Generation Settings)]({details_link})')
     embed.set_image(url="attachment://test.png")
     await sent_message.edit_original_response(file=image3, embed=embed, content='', view=MyView())
 

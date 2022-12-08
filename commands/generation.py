@@ -6,12 +6,13 @@ from PIL import Image
 url = "http://127.0.0.1:7860"
 
 
-async def create(prompt):
+async def create(prompt, neg_prompt):
     
         payload = {
         "prompt": prompt,
-        "width": 768,
-        "height": 768,
+        "negative_prompt": neg_prompt,
+        "width": 512,
+        "height": 512,
         "steps": 20
         }
 
@@ -41,8 +42,8 @@ async def variation(prompt, img_url):
         "init_images": ["data:image/png;base64," + str(base64.b64encode(requests.get(img_url).content), "utf-8")],    
         "denoising_strength": 0.75,
         "prompt": prompt,
-        "width": 768,
-        "height": 768,
+        "width": 512,
+        "height": 512,
         "steps": 20
         }
 
