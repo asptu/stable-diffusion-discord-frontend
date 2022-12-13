@@ -1,6 +1,5 @@
 /__pycache__
 /stable-diffusion-webui
 sd.py
-test.py
 test2.py
 settings.json
