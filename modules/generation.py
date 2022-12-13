@@ -114,3 +114,48 @@ async def upscale(image_url):
 
 
     return arr, image
+
+
+async def detailed_upscale(image_url, width, height, seed, prompt):
+
+    payload = {
+    "upscaling_resize": 2,
+    "upscaler_1": "lollypop",
+    "upscaler_2": "None",
+    "image": "data:image/png;base64," + str(base64.b64encode(requests.get(image_url).content), "utf-8")
+    }
+
+    response = requests.post(url=f'{url}/sdapi/v1/extra-single-image', json=payload)
+
+    i = response.json()
+
+    payload = {
+            "init_images": ["data:image/png;base64," + str(i['image'])],    
+            "denoising_strength": 0.2,
+            "width": width*2,
+            "height": height*2,
+            "steps": 50,
+            "cfg_scale": 14,
+            "sampler_name": "DDIM",
+            "seed": seed,
+            "prompt": prompt,
+            }
+
+    response2 = requests.post(url=f'{url}/sdapi/v1/img2img', json=payload)
+    r = response2.json()
+
+    for i in r['images']:
+        png_payload = {
+            "image": "data:image/png;base64," + i
+        }
+        response2 = requests.post(url=f'{url}/sdapi/v1/png-info', json=png_payload)
+
+        info = response2.json().get("info")
+        pnginfo = PngImagePlugin.PngInfo()
+        pnginfo.add_text("parameters", response2.json().get("info"))
+
+        image = Image.open(io.BytesIO(base64.b64decode(i.split(",",1)[0])))
+        arr = io.BytesIO()
+        image.save(arr, format='PNG', pnginfo=pnginfo)
+        arr.seek(0)
+        return arr, image, info

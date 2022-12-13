@@ -1,11 +1,12 @@
 import discord
-from modules.generation import create, variation, upscale
+from modules.generation import create, variation, upscale, detailed_upscale
 from modules.pastee import pastee_post
 from PIL import ImageStat, Image
 import json
 import queue
 import requests
 import threading
+import re
 from io import BytesIO
 
 
@@ -110,12 +111,22 @@ neg_prompt: Option(str, description="What you DON'T WANT in your image (Not Requ
         async def third_button_callback(self, button, interaction):
 
             original_message, get_attachment_message = await get_button_interaction(interaction, ctx, sent_message[0])
-            arr, image = await upscale(get_attachment_message.embeds[0].image.url)
-            details_link = await pastee_post(prompt, 'test')
-            embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Upscaled: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({details_link})')
-            embed.set_image(url="attachment://test.png")
-            sent_message_body = await original_message.edit_original_response(file=discord.File(fp=arr, filename='test.png'), embed=embed, content='', view=MyView())
-            sent_message.insert(0, sent_message_body)
+
+            check_image_size = requests.get(get_attachment_message.embeds[0].image.url)
+            check_image_size = Image.open(BytesIO(check_image_size.content))
+            width, height = check_image_size.size
+            get_seed = re.search('Seed: (.*), Size:', check_image_size.info['parameters'])
+
+            if width >= 2048 or height >= 2048:
+                 await original_message.edit_original_response(content='Image too large to upscale')
+            else:
+
+                arr, image, pnginfo = await detailed_upscale(get_attachment_message.embeds[0].image.url, width, height, get_seed.group(1), prompt)
+                details_link = await pastee_post(prompt, pnginfo)
+                embed = discord.Embed(color=rgb2int(tuple(ImageStat.Stat(image).median)),description=f'[Upscaled: ](https://discord.com/channels/{get_attachment_message.guild.id}/{get_attachment_message.channel.id}/{get_attachment_message.id})**{prompt}**\n[(Generation Settings)]({details_link})')
+                embed.set_image(url="attachment://test.png")
+                sent_message_body = await original_message.edit_original_response(file=discord.File(fp=arr, filename='test.png'), embed=embed, content='', view=MyView())
+                sent_message.insert(0, sent_message_body)
 
     # Original payload code
 
